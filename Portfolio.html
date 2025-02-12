@@ -73,28 +73,23 @@
 
 <script>
     const PHYSICS = {
-        // Базовая физика
-        GRAVITY: -9.81,
-        MASS: 1,                    // Увеличен для большей инертности
-        LINEAR_DAMPING: 0.02,         // Уменьшен для лучшего сохранения момента
-        GRAVITY_SCALE: 1,           // Слегка увеличен для более "весомого" ощущения
+        GRAVITY: -9.81,               // Увеличена гравитация для более динамичного геймплея
+        MASS: 2,
+        LINEAR_DAMPING: 0.015,      // Уменьшено сопротивление воздуха
+        GRAVITY_SCALE: 1,
 
-        // Материалы
-        FRICTION: 0.92,               // Уменьшен для лучшего скольжения
-        BOUNCINESS: 0.7,             // Уменьшен для более контролируемых отскоков
+        FRICTION: 0.85,             // Улучшен баланс скольжения
+        BOUNCINESS: 0.65,           // Уменьшена упругость для лучшего контроля
 
-        // Силы движения
-        GROUND_HORIZONTAL_FORCE: 20,  // Сбалансирован для постепенного разгона
-        AIR_HORIZONTAL_FORCE: 15,      // Значительно меньше для сложного воздушного контроля
+        GROUND_HORIZONTAL_FORCE: 25, // Увеличена сила на земле
+        AIR_HORIZONTAL_FORCE: 15,    // Уменьшена сила в воздухе для баланса
 
-        JUMP_FORCE: 250,             // Уменьшен для более точных прыжков
-        FAST_FALL_FORCE: 25,         // Увеличен для более заметного эффекта
+        JUMP_FORCE: 300,            // Увеличена сила прыжка
+        FAST_FALL_FORCE: 35,        // Увеличена сила падения
 
-        // Ограничения скорости
-        MAX_HORIZONTAL_VELOCITY: 5,   // Сбалансирован для контролируемого движения
-        MAX_VERTICAL_VELOCITY: 7.5,     // Увеличен для динамичных прыжков
+        MAX_HORIZONTAL_VELOCITY: 6,  // Увеличена максимальная горизонтальная скорость
+        MAX_VERTICAL_VELOCITY: 8,    // Увеличена максимальная вертикальная скорость
 
-        // Физические параметры
         RADIUS: 15,
         FIXED_TIME_STEP: 1/60
     };
@@ -115,7 +110,7 @@
             this.HEIGHT = this.container.clientHeight;
 
             this.platforms = [
-                { x: 0, y: this.HEIGHT - 20, width: this.WIDTH, height: 20, friction: 1 },
+                { x: 0, y: this.HEIGHT - 20, width: this.WIDTH, height: 20, friction: PHYSICS.FRICTION },
                 { x: 100, y: 450, width: 200, height: 20, friction: 1 },
                 { x: 500, y: 350, width: 200, height: 20, friction: 1 },
                 { x: 300, y: 250, width: 200, height: 20, friction: 1 }
