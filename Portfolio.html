@@ -1,292 +1,298 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Physical Ball</title>
     <style>
         body {
             margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #222;
+            font-family: monospace;
+        }
+
+        #game-container {
+            width: 800px;
+            height: 600px;
+            border: 2px solid #444;
+            position: relative;
             overflow: hidden;
             background: #1a1a1a;
         }
-        
+
         #ball {
-            width: 50px;
-            height: 50px;
-            background: radial-gradient(circle at 30% 30%, #ffffff, #ff4444);
+            width: 30px;
+            height: 30px;
+            background: #ff4444;
             border-radius: 50%;
             position: absolute;
-            box-shadow: inset -5px -5px 15px rgba(0,0,0,0.3);
+            left: 385px;
+            top: 285px;
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
         }
-        
+
+        .platform {
+            position: absolute;
+            background: #444;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+
         #info {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            color: white;
-            font-family: Arial, sans-serif;
-            background: rgba(0,0,0,0.5);
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.5);
             padding: 10px;
             border-radius: 5px;
         }
 
-        
-        
-        #ground {
+        #debug {
             position: absolute;
-            bottom: 0;
-            width: 100%;
-            height: 2px;
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .debug-info {
-            color: #666;
-            font-size: 12px;
+            top: 10px;
+            right: 10px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
         }
     </style>
 </head>
 <body>
+<div id="game-container">
     <div id="ball"></div>
-    <div id="ground"></div>
     <div id="info">
-        Управление:<br>
-        ← → или A/D - движение влево/вправо<br>
-        ↑ или W - прыжок с земли<br>
-        ↓ или S (удерживать) - быстрое падение<br>
-        Скорость: <span id="speed">0</span> px/s<br>
-        На земле: <span id="grounded">да</span>
-        <div class="debug-info">
-            Расстояние до земли: <span id="groundDistance">0</span>px<br>
-            Время между приземлениями: <span id="airTime">0</span>ms
-        </div>
+        Controls:<br>
+        AD/Arrows - Push left/right<br>
+        W/Up - Jump (when grounded)<br>
+        S/Down - Fast fall (in air)
     </div>
+    <div id="debug"></div>
+</div>
 
-    <script>
-        // Константы физики
-        const PHYSICS = {
-            MOVE_FORCE: 0.8,
-            MAX_MOVE_SPEED: 15,
-            JUMP_FORCE: -18,
-            GRAVITY: 0.6,
-            FAST_FALL_MULT: 2.5,
-            GROUND_FRICTION: 0.95,
-            AIR_RESISTANCE: 0.98,
-            BOUNCE_FORCE: 0.5,
-            WALL_BOUNCE: 0.4,
-            MIN_BOUNCE_SPEED: 4,
-            GROUND_STICK_FORCE: 0.8,
-            GROUND_CHECK_THRESHOLD: 1
-        };
+<script>
+    const PHYSICS = {
+        // Базовая физика
+        GRAVITY: -9.81,
+        MASS: 1,                    // Увеличен для большей инертности
+        LINEAR_DAMPING: 0.02,         // Уменьшен для лучшего сохранения момента
+        GRAVITY_SCALE: 1,           // Слегка увеличен для более "весомого" ощущения
 
-        // Состояние игры
-        const gameState = {
-            pos: { x: 100, y: 100 },
-            vel: { x: 0, y: 0 },
-            isGrounded: false,
-            lastGroundStartTime: 0,   // Когда последний раз приземлились
-            lastGroundEndTime: 0,     // Когда последний раз оторвались от земли
-            timeBetweenLandings: 0,   // Время между последними приземлениями
-            lastTimeBetweenLandings: 0, // Предыдущее время между приземлениями
-            keys: new Set()
-        };
+        // Материалы
+        FRICTION: 0.92,               // Уменьшен для лучшего скольжения
+        BOUNCINESS: 0.7,             // Уменьшен для более контролируемых отскоков
 
-        // DOM элементы
-        const elements = {
-            ball: document.getElementById('ball'),
-            speedDisplay: document.getElementById('speed'),
-            groundedDisplay: document.getElementById('grounded'),
-            groundDistanceDisplay: document.getElementById('groundDistance'),
-            airTimeDisplay: document.getElementById('airTime')
-        };
+        // Силы движения
+        GROUND_HORIZONTAL_FORCE: 20,  // Сбалансирован для постепенного разгона
+        AIR_HORIZONTAL_FORCE: 15,      // Значительно меньше для сложного воздушного контроля
 
-        // Обработчики ввода
-        class InputHandler {
-            static init() {
-                window.addEventListener('keydown', e => {
-                    const key = e.key.toLowerCase();
-                    gameState.keys.add(key);
-                    if(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
-                        e.preventDefault();
-                    }
+        JUMP_FORCE: 250,             // Уменьшен для более точных прыжков
+        FAST_FALL_FORCE: 25,         // Увеличен для более заметного эффекта
+
+        // Ограничения скорости
+        MAX_HORIZONTAL_VELOCITY: 5,   // Сбалансирован для контролируемого движения
+        MAX_VERTICAL_VELOCITY: 7.5,     // Увеличен для динамичных прыжков
+
+        // Физические параметры
+        RADIUS: 15,
+        FIXED_TIME_STEP: 1/60
+    };
+
+    class RigidBody2D {
+        constructor() {
+            this.ball = document.getElementById('ball');
+            this.container = document.getElementById('game-container');
+            this.debug = document.getElementById('debug');
+
+            this.position = { x: 385, y: 285 };
+            this.velocity = { x: 0, y: 0 };
+            this.forces = { x: 0, y: 0 };
+            this.grounded = false;
+            this.keys = {};
+
+            this.WIDTH = this.container.clientWidth;
+            this.HEIGHT = this.container.clientHeight;
+
+            this.platforms = [
+                { x: 0, y: this.HEIGHT - 20, width: this.WIDTH, height: 20, friction: 1 },
+                { x: 100, y: 450, width: 200, height: 20, friction: 1 },
+                { x: 500, y: 350, width: 200, height: 20, friction: 1 },
+                { x: 300, y: 250, width: 200, height: 20, friction: 1 }
+            ];
+
+            this.setupEventListeners();
+            this.createPlatformElements();
+            this.fixedUpdate();
+        }
+
+        setupEventListeners() {
+            document.addEventListener('keydown', e => this.keys[e.key] = true);
+            document.addEventListener('keyup', e => this.keys[e.key] = false);
+        }
+
+        createPlatformElements() {
+            this.platforms.forEach(platform => {
+                const element = document.createElement('div');
+                element.className = 'platform';
+                Object.assign(element.style, {
+                    left: platform.x + 'px',
+                    top: platform.y + 'px',
+                    width: platform.width + 'px',
+                    height: platform.height + 'px'
                 });
-
-                window.addEventListener('keyup', e => {
-                    gameState.keys.delete(e.key.toLowerCase());
-                });
-            }
-
-            static isPressed(key) {
-                return gameState.keys.has(key);
-            }
-
-            static isMovingLeft() {
-                return this.isPressed('arrowleft') || this.isPressed('a');
-            }
-
-            static isMovingRight() {
-                return this.isPressed('arrowright') || this.isPressed('d');
-            }
-
-            static isJumping() {
-                return this.isPressed('arrowup') || this.isPressed('w');
-            }
-
-            static isFastFalling() {
-                return this.isPressed('arrowdown') || this.isPressed('s');
-            }
-        }
-
-        // Физический движок
-        class Physics {
-            static updatePosition(dt) {
-                gameState.pos.x += gameState.vel.x * dt;
-                gameState.pos.y += gameState.vel.y * dt;
-            }
-
-            static applyGravity(dt) {
-                if (InputHandler.isFastFalling() && !gameState.isGrounded) {
-                    gameState.vel.y += PHYSICS.GRAVITY * PHYSICS.FAST_FALL_MULT;
-                } else {
-                    gameState.vel.y += PHYSICS.GRAVITY * dt;
-                }
-            }
-
-            static handleMovement(dt) {
-                if (InputHandler.isMovingLeft()) {
-                    gameState.vel.x -= PHYSICS.MOVE_FORCE * dt;
-                }
-                if (InputHandler.isMovingRight()) {
-                    gameState.vel.x += PHYSICS.MOVE_FORCE * dt;
-                }
-
-                // Ограничение скорости
-                gameState.vel.x = Math.min(Math.max(gameState.vel.x, -PHYSICS.MAX_MOVE_SPEED), PHYSICS.MAX_MOVE_SPEED);
-
-                // Трение
-                gameState.vel.x *= gameState.isGrounded ? PHYSICS.GROUND_FRICTION : PHYSICS.AIR_RESISTANCE;
-            }
-
-            static handleJump() {
-                if (InputHandler.isJumping() && gameState.isGrounded) {
-                    gameState.vel.y = PHYSICS.JUMP_FORCE;
-                    gameState.isGrounded = false;
-                    const now = Date.now();
-                    gameState.lastGroundEndTime = now;
-                }
-            }
-
-            static updateLandingTimes(now, wasGrounded) {
-                // Обработка приземления
-                if (!wasGrounded && gameState.isGrounded) {
-                    gameState.lastGroundStartTime = now;
-                    
-                    // Если у нас есть предыдущее время отрыва от земли
-                    if (gameState.lastGroundEndTime > 0) {
-                        // Сохраняем предыдущий интервал
-                        gameState.lastTimeBetweenLandings = gameState.timeBetweenLandings;
-                        // Вычисляем новый интервал между приземлениями
-                        gameState.timeBetweenLandings = now - gameState.lastGroundEndTime;
-                    }
-                }
-                
-                // Обработка отрыва от земли
-                if (wasGrounded && !gameState.isGrounded) {
-                    gameState.lastGroundEndTime = now;
-                }
-            }
-
-            static handleCollisions(windowWidth, windowHeight, ballSize) {
-                const groundY = windowHeight - ballSize;
-                const now = Date.now();
-                const wasGrounded = gameState.isGrounded;
-
-                // Коллизия с землёй
-                if (gameState.pos.y > groundY) {
-                    gameState.pos.y = groundY;
-                    
-                    if (!InputHandler.isFastFalling() && Math.abs(gameState.vel.y) > PHYSICS.MIN_BOUNCE_SPEED) {
-                        gameState.vel.y = -Math.abs(gameState.vel.y * PHYSICS.BOUNCE_FORCE);
-                        gameState.isGrounded = false;
-                    } else {
-                        gameState.vel.y = 0;
-                        gameState.isGrounded = true;
-                    }
-                } else {
-                    gameState.isGrounded = Math.abs(gameState.pos.y - groundY) <= PHYSICS.GROUND_CHECK_THRESHOLD;
-                }
-
-                this.updateLandingTimes(now, wasGrounded);
-
-                // Коллизия с потолком
-                if (gameState.pos.y < 0) {
-                    gameState.pos.y = 0;
-                    gameState.vel.y = Math.abs(gameState.vel.y * PHYSICS.BOUNCE_FORCE);
-                }
-
-                // Коллизия со стенами
-                if (gameState.pos.x < 0) {
-                    gameState.pos.x = 0;
-                    gameState.vel.x = Math.abs(gameState.vel.x * PHYSICS.WALL_BOUNCE);
-                }
-                if (gameState.pos.x > windowWidth - ballSize) {
-                    gameState.pos.x = windowWidth - ballSize;
-                    gameState.vel.x = -Math.abs(gameState.vel.x * PHYSICS.WALL_BOUNCE);
-                }
-            }
-        }
-
-        // Обновление UI
-        class UI {
-            static update() {
-                const speed = Math.sqrt(gameState.vel.x ** 2 + gameState.vel.y ** 2);
-                elements.speedDisplay.textContent = Math.round(speed * 10) / 10;
-                elements.groundedDisplay.textContent = gameState.isGrounded ? 'да' : 'нет';
-                elements.groundDistanceDisplay.textContent = 
-                    Math.round(window.innerHeight - gameState.pos.y - 50);
-                elements.airTimeDisplay.textContent = Math.round(gameState.timeBetweenLandings);
-            }
-        }
-
-        // Основной игровой цикл
-        function gameLoop() {
-            const dt = 1;
-            const ballSize = 50;
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-
-            Physics.handleMovement(dt);
-            Physics.handleJump();
-            Physics.applyGravity(dt);
-            Physics.updatePosition(dt);
-            Physics.handleCollisions(windowWidth, windowHeight, ballSize);
-
-            // Обновление позиции мяча
-            elements.ball.style.transform = `translate(${gameState.pos.x}px, ${gameState.pos.y}px)`;
-
-            UI.update();
-            requestAnimationFrame(gameLoop);
-        }
-
-        // Инициализация
-        function init() {
-            InputHandler.init();
-            window.addEventListener('resize', () => {
-                const windowWidth = window.innerWidth;
-                const windowHeight = window.innerHeight;
-                const ballSize = 50;
-
-                if (gameState.pos.x > windowWidth - ballSize) {
-                    gameState.pos.x = windowWidth - ballSize;
-                }
-                if (gameState.pos.y > windowHeight - ballSize) {
-                    gameState.pos.y = windowHeight - ballSize;
-                }
+                this.container.appendChild(element);
             });
-
-            gameLoop();
         }
 
-        init();
-    </script>
+        applyForce(x, y) {
+            this.forces.x += x;
+            this.forces.y += y;
+        }
+
+        handleInput() {
+            // Базовая гравитация всегда присутствует
+            this.forces = { x: 0, y: PHYSICS.GRAVITY * PHYSICS.GRAVITY_SCALE * PHYSICS.MASS };
+
+            // Выбираем силу в зависимости от состояния
+            const horizontalForce = this.grounded ? PHYSICS.GROUND_HORIZONTAL_FORCE : PHYSICS.AIR_HORIZONTAL_FORCE;
+
+            // Горизонтальное движение
+            if (this.keys['a'] || this.keys['A'] || this.keys['ArrowLeft']) {
+                this.applyForce(-horizontalForce, 0);
+            }
+            if (this.keys['d'] || this.keys['D'] || this.keys['ArrowRight']) {
+                this.applyForce(horizontalForce, 0);
+            }
+
+            // Прыжок только когда на земле
+            if (this.grounded && (this.keys['w'] || this.keys['W'] || this.keys['ArrowUp'])) {
+                this.applyForce(0, PHYSICS.JUMP_FORCE);
+                this.grounded = false;
+            }
+
+            // Быстрое падение только в воздухе
+            if (!this.grounded && (this.keys['s'] || this.keys['S'] || this.keys['ArrowDown'])) {
+                this.applyForce(0, -PHYSICS.FAST_FALL_FORCE);
+            }
+        }
+
+        updatePhysics() {
+            // Применяем силы
+            this.velocity.x += (this.forces.x / PHYSICS.MASS) * PHYSICS.FIXED_TIME_STEP;
+            this.velocity.y += (this.forces.y / PHYSICS.MASS) * PHYSICS.FIXED_TIME_STEP;
+
+            // Воздушное сопротивление только в воздухе
+            if (!this.grounded) {
+                this.velocity.x *= (1 - PHYSICS.LINEAR_DAMPING * PHYSICS.FIXED_TIME_STEP);
+                this.velocity.y *= (1 - PHYSICS.LINEAR_DAMPING * PHYSICS.FIXED_TIME_STEP);
+            }
+
+            // Ограничение скорости
+            this.velocity.x = Math.max(-PHYSICS.MAX_HORIZONTAL_VELOCITY,
+                Math.min(PHYSICS.MAX_HORIZONTAL_VELOCITY, this.velocity.x));
+            this.velocity.y = Math.max(-PHYSICS.MAX_VERTICAL_VELOCITY,
+                Math.min(PHYSICS.MAX_VERTICAL_VELOCITY, this.velocity.y));
+
+            // Обновление позиции
+            this.position.x += this.velocity.x;
+            this.position.y -= this.velocity.y;  // Инвертированная Y для экранных координат
+        }
+
+        handleCollisions() {
+            // Столкновения со стенами
+            if (this.position.x < PHYSICS.RADIUS) {
+                this.position.x = PHYSICS.RADIUS;
+                this.velocity.x = Math.abs(this.velocity.x) * PHYSICS.BOUNCINESS;
+            } else if (this.position.x > this.WIDTH - PHYSICS.RADIUS) {
+                this.position.x = this.WIDTH - PHYSICS.RADIUS;
+                this.velocity.x = -Math.abs(this.velocity.x) * PHYSICS.BOUNCINESS;
+            }
+
+            // Сбрасываем grounded перед проверкой платформ
+            this.grounded = false;
+
+            // Проверяем столкновения с платформами
+            for (const platform of this.platforms) {
+                if (this.checkCircleRectCollision(platform)) {
+                    this.resolveCollision(platform);
+                }
+            }
+        }
+
+        checkCircleRectCollision(rect) {
+            const closestX = Math.max(rect.x, Math.min(this.position.x, rect.x + rect.width));
+            const closestY = Math.max(rect.y, Math.min(this.position.y, rect.y + rect.height));
+
+            const distanceX = this.position.x - closestX;
+            const distanceY = this.position.y - closestY;
+            const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+
+            return distanceSquared < (PHYSICS.RADIUS * PHYSICS.RADIUS);
+        }
+
+        resolveCollision(platform) {
+            const closestX = Math.max(platform.x, Math.min(this.position.x, platform.x + platform.width));
+            const closestY = Math.max(platform.y, Math.min(this.position.y, platform.y + platform.height));
+
+            const penetrationX = this.position.x - closestX;
+            const penetrationY = this.position.y - closestY;
+            const distance = Math.sqrt(penetrationX * penetrationX + penetrationY * penetrationY);
+
+            if (distance === 0) return;
+
+            const normalX = penetrationX / distance;
+            const normalY = penetrationY / distance;
+
+            const penetrationDepth = PHYSICS.RADIUS - distance;
+            this.position.x += normalX * penetrationDepth;
+            this.position.y += normalY * penetrationDepth;
+
+            const isVerticalCollision = Math.abs(normalY) > Math.abs(normalX);
+
+            if (isVerticalCollision) {
+                if (normalY < 0 && this.velocity.y < 0) {
+                    this.grounded = true;
+                    if (Math.abs(this.velocity.y) > 2) {
+                        this.velocity.y = -this.velocity.y * PHYSICS.BOUNCINESS;
+                    } else {
+                        this.velocity.y = 0;
+                    }
+
+                    const frictionForce = -this.velocity.x * platform.friction;
+                    this.velocity.x += frictionForce * PHYSICS.FIXED_TIME_STEP;
+                } else if (normalY > 0 && this.velocity.y > 0) {
+                    this.velocity.y = -this.velocity.y * PHYSICS.BOUNCINESS;
+                }
+            } else {
+                if (this.velocity.x * normalX > 0) {
+                    this.velocity.x = -this.velocity.x * PHYSICS.BOUNCINESS;
+                }
+            }
+        }
+
+        updateDebugInfo() {
+            this.debug.textContent = `
+            Velocity: (${this.velocity.x.toFixed(2)}, ${this.velocity.y.toFixed(2)})
+            Grounded: ${this.grounded}
+            Forces: (${this.forces.x.toFixed(2)}, ${this.forces.y.toFixed(2)})
+        `;
+        }
+
+        fixedUpdate = () => {
+            this.handleInput();
+            this.updatePhysics();
+            this.handleCollisions();
+
+            this.ball.style.left = (this.position.x - PHYSICS.RADIUS) + 'px';
+            this.ball.style.top = (this.position.y - PHYSICS.RADIUS) + 'px';
+
+            this.updateDebugInfo();
+            requestAnimationFrame(this.fixedUpdate);
+        }
+    }
+
+    new RigidBody2D();
+</script>
 </body>
 </html>
