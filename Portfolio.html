@@ -4,19 +4,16 @@
     <style>
         body {
             margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
             background: #222;
             font-family: monospace;
+            height: 300vh;
+            overflow-x: hidden;
         }
 
         #game-container {
-            width: 800px;
-            height: 600px;
-            border: 2px solid #444;
-            position: relative;
+            width: 100vw;
+            height: 300vh;
+            position: absolute;
             overflow: hidden;
             background: #1a1a1a;
         }
@@ -73,22 +70,22 @@
 
 <script>
     const PHYSICS = {
-        GRAVITY: -9.81,               // Увеличена гравитация для более динамичного геймплея
-        MASS: 2,
-        LINEAR_DAMPING: 0.015,      // Уменьшено сопротивление воздуха
+        GRAVITY: -15.5,              // Увеличена для более быстрого падения и динамичности
+        MASS: 1.5,                   // Уменьшена для более легкого управления
+        LINEAR_DAMPING: 0.008,       // Уменьшено для лучшего сохранения момента
         GRAVITY_SCALE: 1,
 
-        FRICTION: 0.85,             // Улучшен баланс скольжения
-        BOUNCINESS: 0.65,           // Уменьшена упругость для лучшего контроля
+        FRICTION: 0.92,              // Увеличено для лучшего контроля на платформах
+        BOUNCINESS: 0.75,            // Увеличена для более "живых" отскоков
 
-        GROUND_HORIZONTAL_FORCE: 25, // Увеличена сила на земле
-        AIR_HORIZONTAL_FORCE: 15,    // Уменьшена сила в воздухе для баланса
+        GROUND_HORIZONTAL_FORCE: 35,  // Увеличена для более резкого ускорения
+        AIR_HORIZONTAL_FORCE: 25,     // Увеличена для лучшего воздушного контроля
 
-        JUMP_FORCE: 300,            // Увеличена сила прыжка
-        FAST_FALL_FORCE: 35,        // Увеличена сила падения
+        JUMP_FORCE: 380,             // Увеличена для более высоких прыжков
+        FAST_FALL_FORCE: 45,         // Увеличена для более быстрого падения
 
-        MAX_HORIZONTAL_VELOCITY: 6,  // Увеличена максимальная горизонтальная скорость
-        MAX_VERTICAL_VELOCITY: 8,    // Увеличена максимальная вертикальная скорость
+        MAX_HORIZONTAL_VELOCITY: 8,   // Увеличена для более быстрого движения
+        MAX_VERTICAL_VELOCITY: 12,    // Увеличена для более динамичных прыжков
 
         RADIUS: 15,
         FIXED_TIME_STEP: 1/60
@@ -100,17 +97,16 @@
             this.container = document.getElementById('game-container');
             this.debug = document.getElementById('debug');
 
-            this.position = { x: 385, y: 285 };
+            this.position = { x: 385, y: 100 };
             this.velocity = { x: 0, y: 0 };
             this.forces = { x: 0, y: 0 };
             this.grounded = false;
             this.keys = {};
 
-            this.WIDTH = this.container.clientWidth;
-            this.HEIGHT = this.container.clientHeight;
+            this.WIDTH = window.innerWidth;
+            this.HEIGHT = window.innerHeight;
 
             this.platforms = [
-                { x: 0, y: this.HEIGHT - 20, width: this.WIDTH, height: 20, friction: PHYSICS.FRICTION },
                 { x: 100, y: 450, width: 200, height: 20, friction: 1 },
                 { x: 500, y: 350, width: 200, height: 20, friction: 1 },
                 { x: 300, y: 250, width: 200, height: 20, friction: 1 }
@@ -124,6 +120,10 @@
         setupEventListeners() {
             document.addEventListener('keydown', e => this.keys[e.key] = true);
             document.addEventListener('keyup', e => this.keys[e.key] = false);
+            window.addEventListener('resize', () => {
+                this.WIDTH = window.innerWidth;
+                this.HEIGHT = window.innerHeight;
+            });
         }
 
         createPlatformElements() {
@@ -204,6 +204,17 @@
                 this.velocity.x = -Math.abs(this.velocity.x) * PHYSICS.BOUNCINESS;
             }
 
+            // Верхняя и нижняя границы
+            if (this.position.y < PHYSICS.RADIUS) {
+                this.position.y = PHYSICS.RADIUS;
+                this.velocity.y = -this.velocity.y * PHYSICS.BOUNCINESS;
+            } else if (this.position.y > document.documentElement.scrollHeight - PHYSICS.RADIUS) {
+                // Используем полную высоту документа
+                this.position.y = document.documentElement.scrollHeight - PHYSICS.RADIUS;
+                this.velocity.y = -this.velocity.y * PHYSICS.BOUNCINESS;
+                this.grounded = true;
+            }
+
             // Сбрасываем grounded перед проверкой платформ
             this.grounded = false;
 
@@ -274,6 +285,15 @@
         `;
         }
 
+        updateScroll() {
+            const viewportHeight = window.innerHeight;
+            const ballCenterY = this.position.y;
+            const scrollY = Math.max(0, ballCenterY - (viewportHeight / 2));
+            
+            // Мгновенная прокрутка для лучшего отслеживания
+            window.scrollTo(0, scrollY);
+        }
+
         fixedUpdate = () => {
             this.handleInput();
             this.updatePhysics();
@@ -282,6 +302,7 @@
             this.ball.style.left = (this.position.x - PHYSICS.RADIUS) + 'px';
             this.ball.style.top = (this.position.y - PHYSICS.RADIUS) + 'px';
 
+            this.updateScroll();
             this.updateDebugInfo();
             requestAnimationFrame(this.fixedUpdate);
         }
