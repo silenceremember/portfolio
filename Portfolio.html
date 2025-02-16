@@ -112,6 +112,18 @@
                 { x: 300, y: 250, width: 200, height: 20, friction: 1 }
             ];
 
+            // Добавляем параметры для камеры
+            this.cameraBox = {
+                width: window.innerWidth * 0.3,    // 30% от ширины экрана
+                height: window.innerHeight * 0.3    // 30% от высоты экрана
+            };
+            
+            // Начальное положение камеры
+            this.cameraPosition = {
+                x: window.scrollX,
+                y: window.scrollY
+            };
+
             this.setupEventListeners();
             this.createPlatformElements();
             this.fixedUpdate();
@@ -286,11 +298,42 @@
 
         updateScroll() {
             const viewportHeight = window.innerHeight;
-            const ballCenterY = this.position.y;
-            const scrollY = Math.max(0, ballCenterY - (viewportHeight / 2));
+            const viewportCenter = {
+                x: window.innerWidth / 2,
+                y: viewportHeight / 2
+            };
             
-            // Мгновенная прокрутка для лучшего отслеживания
-            window.scrollTo(0, scrollY);
+            // Границы бокса камеры
+            const boxBounds = {
+                left: viewportCenter.x - this.cameraBox.width / 2,
+                right: viewportCenter.x + this.cameraBox.width / 2,
+                top: viewportCenter.y - this.cameraBox.height / 2,
+                bottom: viewportCenter.y + this.cameraBox.height / 2
+            };
+            
+            // Позиция шарика относительно экрана
+            const ballScreenPos = {
+                x: this.position.x,
+                y: this.position.y - window.scrollY
+            };
+            
+            // Проверяем, вышел ли шарик за пределы бокса
+            let targetScrollY = window.scrollY;
+            
+            if (ballScreenPos.y < boxBounds.top) {
+                targetScrollY = this.position.y - boxBounds.top;
+            } else if (ballScreenPos.y > boxBounds.bottom) {
+                targetScrollY = this.position.y - boxBounds.bottom;
+            }
+            
+            // Ограничиваем прокрутку границами документа
+            targetScrollY = Math.max(0, Math.min(
+                targetScrollY,
+                document.documentElement.scrollHeight - window.innerHeight
+            ));
+            
+            // Применяем прокрутку
+            window.scrollTo(0, targetScrollY);
         }
 
         fixedUpdate = () => {
