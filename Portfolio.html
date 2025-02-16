@@ -209,14 +209,13 @@
                 this.position.y = PHYSICS.RADIUS;
                 this.velocity.y = -this.velocity.y * PHYSICS.BOUNCINESS;
             } else if (this.position.y > document.documentElement.scrollHeight - PHYSICS.RADIUS) {
-                // Используем полную высоту документа
                 this.position.y = document.documentElement.scrollHeight - PHYSICS.RADIUS;
-                this.velocity.y = -this.velocity.y * PHYSICS.BOUNCINESS;
+                this.velocity.y = Math.abs(this.velocity.y) < 2 ? 0 : -this.velocity.y * PHYSICS.BOUNCINESS;
                 this.grounded = true;
+            } else {
+                // Сбрасываем grounded только если не на полу
+                this.grounded = false;
             }
-
-            // Сбрасываем grounded перед проверкой платформ
-            this.grounded = false;
 
             // Проверяем столкновения с платформами
             for (const platform of this.platforms) {
