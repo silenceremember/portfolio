@@ -6,12 +6,12 @@
             margin: 0;
             scrollbar-width: none;
             -ms-overflow-style: none;
+            overscroll-behavior: none;  /* Предотвращает прокрутку по инерции */
+            touch-action: none;         /* Отключает сенсорную прокрутку */
         }
 
-        html::-webkit-scrollbar,
-        body::-webkit-scrollbar,
-        #game-container::-webkit-scrollbar {
-            display: none;
+        html {
+            overflow: hidden;  /* Блокируем прокрутку на уровне html */
         }
 
         body {
@@ -19,6 +19,7 @@
             font-family: monospace;
             height: 300vh;
             overflow-x: hidden;
+            overflow-y: scroll;         /* Разрешаем вертикальную прокрутку */
         }
 
         #game-container {
@@ -27,6 +28,11 @@
             position: absolute;
             overflow: hidden;
             background: #000000;
+            pointer-events: none;  /* Предотвращаем взаимодействие с контейнером */
+        }
+
+        #ball, #info, #debug, .platform {
+            pointer-events: none;  /* Предотвращаем взаимодействие с элементами игры */
         }
 
         #ball {
