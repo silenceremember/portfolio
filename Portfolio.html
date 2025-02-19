@@ -2,9 +2,20 @@
 <html>
 <head>
     <style>
-        body {
+        html, body, #game-container {
             margin: 0;
-            background: #222;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        html::-webkit-scrollbar,
+        body::-webkit-scrollbar,
+        #game-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        body {
+            background: #000000;
             font-family: monospace;
             height: 300vh;
             overflow-x: hidden;
@@ -15,13 +26,13 @@
             height: 300vh;
             position: absolute;
             overflow: hidden;
-            background: #1a1a1a;
+            background: #000000;
         }
 
         #ball {
             width: 30px;
             height: 30px;
-            background: #ff4444;
+            background: #ffffff;
             border-radius: 50%;
             position: absolute;
             left: 385px;
@@ -31,8 +42,7 @@
 
         .platform {
             position: absolute;
-            background: #444;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+            background: #757575;
         }
 
         #info {
@@ -101,7 +111,7 @@
             this.velocity = { x: 0, y: 0 };
             this.forces = { x: 0, y: 0 };
             this.grounded = false;
-            this.keys = {};
+            this.keys = new Set();
 
             this.WIDTH = window.innerWidth;
             this.HEIGHT = window.innerHeight;
@@ -130,11 +140,16 @@
         }
 
         setupEventListeners() {
-            document.addEventListener('keydown', e => this.keys[e.key] = true);
-            document.addEventListener('keyup', e => this.keys[e.key] = false);
+            document.addEventListener('keydown', e => this.keys.add(e.code));
+            document.addEventListener('keyup', e => this.keys.delete(e.code));
             window.addEventListener('resize', () => {
                 this.WIDTH = window.innerWidth;
                 this.HEIGHT = window.innerHeight;
+            });
+            
+            // Добавляем обработчик потери фокуса окна
+            window.addEventListener('blur', () => {
+                this.keys.clear(); // Очищаем все зажатые клавиши
             });
         }
 
@@ -164,22 +179,22 @@
             // Выбираем силу в зависимости от состояния
             const horizontalForce = this.grounded ? PHYSICS.GROUND_HORIZONTAL_FORCE : PHYSICS.AIR_HORIZONTAL_FORCE;
 
-            // Горизонтальное движение
-            if (this.keys['a'] || this.keys['A'] || this.keys['ArrowLeft']) {
+            // Горизонтальное движение (используем коды клавиш)
+            if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) {
                 this.applyForce(-horizontalForce, 0);
             }
-            if (this.keys['d'] || this.keys['D'] || this.keys['ArrowRight']) {
+            if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) {
                 this.applyForce(horizontalForce, 0);
             }
 
-            // Прыжок только когда на земле
-            if (this.grounded && (this.keys['w'] || this.keys['W'] || this.keys['ArrowUp'])) {
+            // Прыжок
+            if (this.grounded && (this.keys.has('KeyW') || this.keys.has('ArrowUp'))) {
                 this.applyForce(0, PHYSICS.JUMP_FORCE);
                 this.grounded = false;
             }
 
-            // Быстрое падение только в воздухе
-            if (!this.grounded && (this.keys['s'] || this.keys['S'] || this.keys['ArrowDown'])) {
+            // Быстрое падение
+            if (!this.grounded && (this.keys.has('KeyS') || this.keys.has('ArrowDown'))) {
                 this.applyForce(0, -PHYSICS.FAST_FALL_FORCE);
             }
         }
